@@ -1,0 +1,20 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/var/www
+      - ./storage:/var/www/storage
+    ports:
+      - 8080:80
+    working_dir: /var/www
+    command: php -S 0.0.0.0:80 -t public
+
+  artisan:
+    build:
+      context: .
+    volumes:
+      - .:/var/www
+    working_dir: /var/www
+    entrypoint: ["php", "artisan"]
