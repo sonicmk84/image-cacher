@@ -10,11 +10,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Models\Pornstar;
 use App\Models\Thumbnail;
+use App\Services\PornstarFeedValidator;
 
 class SyncPornstarFeed extends Command
 {
     protected $signature = 'sync:pornstar-feed';
     protected $description = 'Download pornstar data and cache thumbnails locally';
+
+    const PORNSTAR_FEED_URL = 'https://ph-c3fuhehkfqh6huc0.z01.azurefd.net/feed_pornstars.json';
+    const INSERT_CHUNK_SIZE = 500;
+    const IMAGE_POOL_SIZE = 100;
 
     public function handle()
     {
@@ -23,7 +28,7 @@ class SyncPornstarFeed extends Command
 
         $this->info('Fetching JSON feed...');
 
-        $response = Http::get('https://ph-c3fuhehkfqh6huc0.z01.azurefd.net/feed_pornstars.json');
+        $response = Http::get(self::PORNSTAR_FEED_URL);
         if ($response->failed()) {
             $this->error('Failed to download feed.');
             return Command::FAILURE;
@@ -43,23 +48,7 @@ class SyncPornstarFeed extends Command
         $validPornstars = [];
         $validThumbnails = [];
         foreach ($feed['items'] as $item) {
-            if (!is_int($item['id'])) {
-                Log::warning("Skipping pornstar: {" . $item['name'] . "}, due to invalid id value: " . $item['id']);
-                continue;
-            }
-
-            if (!preg_match("/^[\pL\s\w\-.'`]{1,50}+$/u", $item['name'])) {
-                Log::warning("Skipping pornstar: {" . $item['name'] . "}, due to invalid name value: " . $item['name']);
-                continue;
-            }
-
-            if (!filter_var($item['link'], FILTER_VALIDATE_URL)) {
-                Log::warning("Skipping pornstar: {" . $item['name'] . "}, due to invalid link value: " . $item['link']);
-                continue;
-            }
-
-            if (!preg_match("/^[A-Za-z]{0,20}+$/u", $item['license'])) {
-                Log::warning("Skipping pornstar: {" . $item['name'] . "}, due to invalid license value: " . $item['license']);
+            if (!PornstarFeedValidator::validatePornstar($item)) {
                 continue;
             }
 
@@ -75,13 +64,7 @@ class SyncPornstarFeed extends Command
 
             $thumbnails = $item['thumbnails'];
             foreach ($thumbnails as $thumbnail) {
-                if (!in_array($thumbnail['type'], ['pc', 'tablet', 'mobile'])) {
-                    Log::warning("Skipping thumbnail: {" . $thumbnail['urls'][0] . "}, due to invalid type value: " . $thumbnail['type']);
-                    continue;
-                }
-
-                if (!filter_var($thumbnail['urls'][0], FILTER_VALIDATE_URL)) {
-                    Log::warning("Skipping thumbnail: {" . $thumbnail['urls'][0] . "}, due to invalid url value: " . $thumbnail['urls'][0]);
+                if (!PornstarFeedValidator::validateThumbnail($thumbnail)) {
                     continue;
                 }
 
@@ -96,7 +79,7 @@ class SyncPornstarFeed extends Command
         }
 
         // Split valid pornstars into chunks and insert to table. If id already exists, update insdead.
-        $chunksPornstars = array_chunk($validPornstars, 500);
+        $chunksPornstars = array_chunk($validPornstars, self::INSERT_CHUNK_SIZE);
 
         $this->info("\nInserting/updating pornstar records: ");
         $bar = $this->output->createProgressBar(count($chunksPornstars));
@@ -114,7 +97,7 @@ class SyncPornstarFeed extends Command
         $bar->finish();
 
         // Split valid thumbnails into chunks and insert to table. Or update if found based on unique constraint.
-        $chunksThumbnails = array_chunk($validThumbnails, 500);
+        $chunksThumbnails = array_chunk($validThumbnails, self::INSERT_CHUNK_SIZE);
 
         $this->info("\nInserting/updating thumbnail records: ");
         $bar = $this->output->createProgressBar(count($chunksThumbnails));
@@ -139,7 +122,7 @@ class SyncPornstarFeed extends Command
 
         if (count($uniqueURLs) > 0) {
             // Download images and save their filename in thumbnails table.
-            $this->DownloadImages($uniqueURLs);
+            $this->downloadImages($uniqueURLs);
         }
 
         $this->info("\nSync completed successfully.");
@@ -147,11 +130,11 @@ class SyncPornstarFeed extends Command
         return Command::SUCCESS;
     }
 
-    private function DownloadImages($imageUrls)
+    private function downloadImages($imageUrls)
     {
         $this->info("\nStarting to download images:");
 
-        $chunks = array_chunk($imageUrls, 100);
+        $chunks = array_chunk($imageUrls, self::IMAGE_POOL_SIZE);
 
         $bar = $this->output->createProgressBar(count($chunks));
         $bar->start();
@@ -190,7 +173,7 @@ class SyncPornstarFeed extends Command
             }
 
             if (count($updates) > 0) {
-                $this->UpdateLocalPaths($updates);
+                $this->updateLocalPaths($updates);
             }
 
             $bar->advance();
@@ -201,7 +184,7 @@ class SyncPornstarFeed extends Command
         $this->info("\nDownloadImages completed.");
     }
 
-    private function UpdateLocalPaths($updates)
+    private function updateLocalPaths($updates)
     {
         $caseSql = '';
         $urls = [];
