@@ -26,11 +26,10 @@ cd image-cacher
 ```bash
 docker-compose up --build
 ```
-
-### 3. Set application key
+### 3. Install dependencies inside the container
 
 ```bash
-docker-compose exec app php artisan key:generate
+docker-compose exec app composer install
 ```
 
 ### 4. Run migrations
