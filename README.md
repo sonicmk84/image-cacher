@@ -45,20 +45,27 @@ docker-compose exec app php artisan migrate
 docker-compose run --rm artisan sync:pornstar-feed
 ```
 ⚠️ This operation takes time with the full dataset due to image downloading.
+- Running the feed sync a second time will not re-download images if they have already been cached, but will download any new/missed/failed images.
+- In case something goes wrong with the feed sync, and you want to stop it and try from scratch: Run:
+```bash
+docker ps --filter "name=artisan" --format "{{.ID}}" | xargs -r docker kill
+```
+to kill the process. Then delete content of `\storage\app\public\thumbnails` and delete `database\database.sqlite`. Finally, run the migrations step again.
 
-🔗 API Endpoints
+## 🔗 API Endpoints
 
 Base URL: http://localhost:8080/api
 
-Method	    Endpoint            Description
--------------------------------------------
-GET	        /pornstars	        Paginated list of pornstars
-GET	        /pornstars/{id}	    Get pornstar with thumbnails
-POST	    /pornstars	        Create new pornstar
-PUT	        /pornstars/{id}	    Update a pornstar
-DELETE	    /pornstars/{id}	    Delete a pornstar
+| Method | Endpoint          | Description                  |
+| ------ | ----------------- | ---------------------------- |
+| GET    | `/pornstars`      | Paginated list of pornstars  |
+| GET    | `/pornstars/{id}` | Get pornstar with thumbnails |
+| POST   | `/pornstars`      | Create new pornstar          |
+| PUT    | `/pornstars/{id}` | Update a pornstar            |
+| DELETE | `/pornstars/{id}` | Delete a pornstar            |
 
-📂 Project Structure
+
+## 📂 Project Structure
 
 - app/Console/Commands/SyncPornstarFeed.php – core logic for data fetch & caching
 - app/Models/Pornstar.php and Thumbnail.php – Eloquent models
@@ -66,14 +73,14 @@ DELETE	    /pornstars/{id}	    Delete a pornstar
 - storage/app/public/thumbnails/ – cached images
 - database/database.sqlite – SQLite database
 
-✅ Notes
+## ✅ Notes
 
 - Built and tested on Windows 10 with Docker Desktop
 - PHP version: 8.4.8 (inside container)
 - Laravel version: 12.19.3
 - Queue system and Redis were explored but not used in the final version for simplicity
 
-🙋 Contact
+## 🙋 Contact
 - Maintained by sonicmk84
 - Full Name: Michael Kallika
 - Email: michael.kallika@gmail.com
