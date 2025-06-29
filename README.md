@@ -39,13 +39,19 @@ touch database/database.sqlite
 docker-compose exec app php artisan migrate
 ```
 
-### 5. Run unit tests
+### 5. Create storage link (for local thumbnails to be served)
+
+```bash
+docker-compose exec app php artisan storage:link
+```
+
+### 6. Run unit tests
 
 ```bash
 docker-compose exec app php artisan test
 ```
 
-### 6. Run the feed sync command
+### 7. Run the feed sync command
 ```bash
 docker-compose run --rm artisan sync:pornstar-feed
 ```
